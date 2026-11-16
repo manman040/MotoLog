@@ -13,3 +13,4 @@ test-results/
 .firebase/
 supabase/.temp/
 supabase/.branches/
+.vercel/

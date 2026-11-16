@@ -1,0 +1,21 @@
+# Never upload local credentials, caches, binaries or CLI authentication state.
+.git/
+.next/
+.tools/
+.firebase/
+node_modules/
+.env*
+!.env.example
+supabase/.temp/
+supabase/.branches/
+node-runtime.zip
+node-checksums.txt
+coverage/
+playwright-report/
+test-results/
+*.log
+*.tsbuildinfo
+**/desktop.ini
+**/Thumbs.db
+**/client_secret*.json
+**/*service-account*.json
