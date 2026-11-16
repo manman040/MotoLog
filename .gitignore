@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.env*
+!.env.example
+.tools/
+node-runtime.zip
+node-checksums.txt
+coverage/
+playwright-report/
+test-results/
+*-debug.log
+*.tsbuildinfo
+.firebase/
+supabase/.temp/
+supabase/.branches/
