@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/vehicles/{vehicleId}/{fileName} {
+      function owner() { return request.auth != null && request.auth.uid == uid; }
+      function vehicleExists() { return firestore.exists(/databases/(default)/documents/users/$(uid)/vehicles/$(vehicleId)); }
+      allow read, delete: if owner() && vehicleExists();
+      allow create: if owner() && vehicleExists()
+        && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)|application/pdf')
+        && fileName.matches('[a-zA-Z0-9-]+[.](jpg|jpeg|png|webp|pdf)');
+      allow update: if false;
+    }
+  }
+}

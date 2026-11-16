@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function text(v,n) { return v is string && v.size() <= n; }
+    function nonempty(v,n) { return text(v,n) && v.size() > 0; }
+    function integer(v,max) { return v is int && v >= 0 && v <= max; }
+    function mileage(v) { return integer(v,10000000); }
+    function amount(v) { return integer(v,100000000); }
+    function day(v) { return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'); }
+    function optionalDay(v) { return v == '' || day(v); }
+    function nullableMileage(v) { return v == null || mileage(v); }
+    function path(v,uid,vid) { return v == '' || (text(v,500) && v.matches('users/'+uid+'/vehicles/'+vid+'/[a-zA-Z0-9-]+[.](jpg|jpeg|png|webp|pdf)')); }
+    function timestamps(d) { return d.createdAt is timestamp && d.updatedAt == request.time; }
+    function recordBase(d,vid) { return d.vehicleId == vid && timestamps(d); }
+    function vehicle(uid,vid) { return get(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)); }
+    function active(uid,vid) { return exists(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)) && vehicle(uid,vid).data.archived == false; }
+    function stableCreated() { return request.resource.data.createdAt == resource.data.createdAt; }
+    match /users/{uid} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['displayName','email','preferences','createdAt','updatedAt'])
+        && text(request.resource.data.displayName,80)
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.preferences.keys().hasOnly(['currency','distanceUnit','locale','timeZone'])
+        && request.resource.data.preferences.currency == 'MYR'
+        && request.resource.data.preferences.distanceUnit == 'km'
+        && request.resource.data.preferences.locale == 'en-MY'
+        && request.resource.data.preferences.timeZone == 'Asia/Kuala_Lumpur';
+      match /registrations/{registration} {
+        allow read: if owner(uid);
+        allow create, update: if owner(uid) && request.resource.data.keys().hasOnly(['vehicleId'])
+          && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(request.resource.data.vehicleId)).data.registrationNumber == registration
+          && (!exists(/databases/$(database)/documents/users/$(uid)/registrations/$(registration)) || resource.data.vehicleId == request.resource.data.vehicleId);
+        allow delete: if owner(uid) && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(resource.data.vehicleId)).data.registrationNumber != registration;
+      }
+      match /summaries/{month} {
+        allow read: if owner(uid);
+        allow create, update: if owner(uid) && request.resource.data.keys().hasOnly(['month','totalSen','categories','vehicles','updatedAt'])
+          && month.matches('^[0-9]{4}-[0-9]{2}$') && request.resource.data.month == month
+          && integer(request.resource.data.totalSen,9007199254740991)
+          && request.resource.data.categories is map && request.resource.data.categories.size() <= 9
+          && request.resource.data.vehicles is map && request.resource.data.vehicles.size() <= 100
+          && request.resource.data.updatedAt == request.time;
+      }
+      match /vehicles/{vid} {
+        function validVehicle(d) {
+          return d.keys().hasOnly(['ownerUid','type','brand','model','variant','year','registrationNumber','nickname','fuelType','transmission','currentOdometerKm','purchaseDate','photoPath','archived','createdAt','updatedAt','latestReadingDate','latestLogId'])
+            && d.ownerUid == uid && d.type in ['motorcycle','car'] && nonempty(d.brand,60) && nonempty(d.model,80)
+            && text(d.variant,80) && integer(d.year,2100) && d.year >= 1900
+            && nonempty(d.registrationNumber,20) && d.registrationNumber.matches('^[A-Z0-9-]+$')
+            && text(d.nickname,80) && nonempty(d.fuelType,40) && nonempty(d.transmission,40)
+            && mileage(d.currentOdometerKm) && optionalDay(d.purchaseDate) && path(d.photoPath,uid,vid)
+            && d.archived is bool && day(d.latestReadingDate) && text(d.latestLogId,100) && timestamps(d)
+            && getAfter(/databases/$(database)/documents/users/$(uid)/registrations/$(d.registrationNumber)).data.vehicleId == vid;
+        }
+        function odometerUnchanged() { return request.resource.data.currentOdometerKm == resource.data.currentOdometerKm && request.resource.data.latestLogId == resource.data.latestLogId && request.resource.data.latestReadingDate == resource.data.latestReadingDate; }
+        function pairedOdometer() {
+          let d=request.resource.data;
+          let log=getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/odometerLogs/$(d.latestLogId)).data;
+          return d.latestLogId != resource.data.latestLogId && log.readingKm == d.currentOdometerKm && log.recordedAt == d.latestReadingDate
+            && log.createdAt == request.time && log.previousReadingKm == resource.data.currentOdometerKm;
+        }
+        allow read: if owner(uid);
+        allow create: if owner(uid) && validVehicle(request.resource.data) && request.resource.data.createdAt == request.time && request.resource.data.latestLogId == '';
+        allow update: if owner(uid) && validVehicle(request.resource.data) && stableCreated() && request.resource.data.ownerUid == resource.data.ownerUid && (odometerUnchanged() || pairedOdometer());
+        allow delete: if false;
+        match /odometerLogs/{id} {
+          allow read: if owner(uid);
+          allow create: if owner(uid) && active(uid,vid)
+            && request.resource.data.keys().hasOnly(['vehicleId','readingKm','recordedAt','note','correction','previousReadingKm','createdAt','updatedAt'])
+            && recordBase(request.resource.data,vid) && request.resource.data.createdAt == request.time
+            && mileage(request.resource.data.readingKm) && day(request.resource.data.recordedAt)
+            && request.resource.data.recordedAt >= vehicle(uid,vid).data.latestReadingDate
+            && text(request.resource.data.note,1000) && request.resource.data.correction is bool
+            && request.resource.data.previousReadingKm == vehicle(uid,vid).data.currentOdometerKm
+            && (request.resource.data.readingKm >= vehicle(uid,vid).data.currentOdometerKm || request.resource.data.correction)
+            && (!request.resource.data.correction || request.resource.data.note.size() >= 10)
+            && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)).data.latestLogId == id
+            && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)).data.currentOdometerKm == request.resource.data.readingKm;
+          allow update, delete: if false;
+        }
+        match /serviceRecords/{id} {
+          function valid(d) { return d.keys().hasOnly(['vehicleId','categoryId','serviceDate','odometerKm','description','workshop','costSen','notes','receiptPath','nextDueKm','nextDueDate','createdAt','updatedAt'])
+            && recordBase(d,vid) && nonempty(d.categoryId,80) && day(d.serviceDate) && mileage(d.odometerKm) && d.odometerKm <= vehicle(uid,vid).data.currentOdometerKm
+            && nonempty(d.description,300) && text(d.workshop,120) && amount(d.costSen) && text(d.notes,2000) && path(d.receiptPath,uid,vid) && nullableMileage(d.nextDueKm) && optionalDay(d.nextDueDate)
+            && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/expenses/$('service_'+id)).data.amountSen == d.costSen; }
+          allow read: if owner(uid);
+          allow create: if owner(uid) && active(uid,vid) && valid(request.resource.data) && request.resource.data.createdAt == request.time;
+          allow update: if owner(uid) && active(uid,vid) && valid(request.resource.data) && stableCreated();
+          allow delete: if owner(uid) && active(uid,vid) && !existsAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/expenses/$('service_'+id));
+        }
+        match /fuelLogs/{id} {
+          function valid(d) { return d.keys().hasOnly(['vehicleId','date','odometerKm','litres','totalCostSen','fuelType','fullTank','notes','createdAt','updatedAt']) && recordBase(d,vid)
+            && day(d.date) && mileage(d.odometerKm) && d.odometerKm <= vehicle(uid,vid).data.currentOdometerKm && d.litres is number && d.litres > 0 && d.litres <= 1000
+            && amount(d.totalCostSen) && nonempty(d.fuelType,40) && d.fullTank is bool && text(d.notes,2000)
+            && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/expenses/$('fuel_'+id)).data.amountSen == d.totalCostSen; }
+          allow read: if owner(uid);
+          allow create: if owner(uid) && active(uid,vid) && valid(request.resource.data) && request.resource.data.createdAt == request.time;
+          allow update: if owner(uid) && active(uid,vid) && valid(request.resource.data) && stableCreated();
+          allow delete: if owner(uid) && active(uid,vid) && !existsAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/expenses/$('fuel_'+id));
+        }
+        match /expenses/{id} {
+          function linked(d) {
+            return (d.sourceType == 'manual' && d.sourceRecordId == '' && !id.matches('^(service_|fuel_).*'))
+              || (d.sourceType == 'service' && id == 'service_'+d.sourceRecordId && d.category == 'Maintenance'
+                && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/serviceRecords/$(d.sourceRecordId)).data.costSen == d.amountSen
+                && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/serviceRecords/$(d.sourceRecordId)).data.serviceDate == d.expenseDate)
+              || (d.sourceType == 'fuel' && id == 'fuel_'+d.sourceRecordId && d.category == 'Fuel'
+                && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/fuelLogs/$(d.sourceRecordId)).data.totalCostSen == d.amountSen
+                && getAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/fuelLogs/$(d.sourceRecordId)).data.date == d.expenseDate);
+          }
+          function valid(d) { return d.keys().hasOnly(['vehicleId','category','amountSen','expenseDate','description','odometerKm','receiptPath','sourceType','sourceRecordId','createdAt','updatedAt'])
+            && recordBase(d,vid) && d.category in ['Maintenance','Repairs','Fuel','Insurance','Road tax','Parking','Tolls','Accessories','Other']
+            && amount(d.amountSen) && day(d.expenseDate) && nonempty(d.description,300) && nullableMileage(d.odometerKm) && path(d.receiptPath,uid,vid) && text(d.sourceRecordId,100) && linked(d); }
+          allow read: if owner(uid);
+          allow create: if owner(uid) && active(uid,vid) && valid(request.resource.data) && request.resource.data.createdAt == request.time;
+          allow update: if owner(uid) && active(uid,vid) && valid(request.resource.data) && stableCreated() && request.resource.data.sourceType == resource.data.sourceType && request.resource.data.sourceRecordId == resource.data.sourceRecordId;
+          allow delete: if owner(uid) && active(uid,vid) && (resource.data.sourceType == 'manual'
+            || (resource.data.sourceType == 'service' && !existsAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/serviceRecords/$(resource.data.sourceRecordId)))
+            || (resource.data.sourceType == 'fuel' && !existsAfter(/databases/$(database)/documents/users/$(uid)/vehicles/$(vid)/fuelLogs/$(resource.data.sourceRecordId))));
+        }
+        match /maintenanceSchedules/{id} {
+          function interval(v,max) { return v == null || (integer(v,max) && v > 0); }
+          function valid(d) { return d.keys().hasOnly(['vehicleId','categoryId','intervalKm','intervalMonths','nextDueKm','nextDueDate','warningKm','warningDays','active','completed','createdAt','updatedAt'])
+            && recordBase(d,vid) && nonempty(d.categoryId,80) && interval(d.intervalKm,1000000) && interval(d.intervalMonths,240)
+            && nullableMileage(d.nextDueKm) && optionalDay(d.nextDueDate) && (d.nextDueKm != null || d.nextDueDate != '')
+            && integer(d.warningKm,100000) && integer(d.warningDays,365) && d.active is bool && d.completed is bool; }
+          allow read: if owner(uid);
+          allow create: if owner(uid) && active(uid,vid) && valid(request.resource.data) && request.resource.data.createdAt == request.time;
+          allow update: if owner(uid) && active(uid,vid) && valid(request.resource.data) && stableCreated();
+          allow delete: if owner(uid) && active(uid,vid);
+        }
+        match /documents/{id} {
+          function valid(d) { return d.keys().hasOnly(['vehicleId','documentType','title','provider','policyReference','expiryDate','renewalCostSen','storagePath','fileName','createdAt','updatedAt'])
+            && recordBase(d,vid) && d.documentType in ['Insurance','Road tax','Registration','Warranty','Other'] && nonempty(d.title,120)
+            && text(d.provider,120) && text(d.policyReference,100) && optionalDay(d.expiryDate) && amount(d.renewalCostSen) && path(d.storagePath,uid,vid) && text(d.fileName,200); }
+          allow read: if owner(uid);
+          allow create: if owner(uid) && active(uid,vid) && valid(request.resource.data) && request.resource.data.createdAt == request.time;
+          allow update: if owner(uid) && active(uid,vid) && valid(request.resource.data) && stableCreated();
+          allow delete: if owner(uid) && active(uid,vid);
+        }
+      }
+    }
+  }
+}

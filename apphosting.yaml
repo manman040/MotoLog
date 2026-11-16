@@ -1,0 +1,8 @@
+runConfig:
+  minInstances: 0
+  maxInstances: 5
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+# Set NEXT_PUBLIC_FIREBASE_* variables in App Hosting before the build.
+# Public Firebase web configuration is bundled at build time; no Admin key is used.

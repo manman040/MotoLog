@@ -1,0 +1,59 @@
+{
+  "name": "motolog",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --use-system-ca node_modules/next/dist/bin/next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "node --use-system-ca node_modules/next/dist/bin/next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:security": "firebase emulators:exec --only auth,firestore,storage --project demo-motolog \"vitest run --config vitest.security.config.ts\"",
+    "test:supabase:local": "node scripts/review-supabase-migrations.mjs"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "7.0.6",
+    "@radix-ui/react-dialog": "1.3.1",
+    "@radix-ui/react-slot": "1.5.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "date-fns": "4.4.0",
+    "firebase": "13.3.0",
+    "geist": "1.9.2",
+    "lucide-react": "1.73.0",
+    "motion": "14.14.0",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-hook-form": "7.92.0",
+    "recharts": "3.10.1",
+    "tailwind-merge": "3.7.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "@playwright/test": "1.65.1",
+    "@tailwindcss/postcss": "4.3.5",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.10",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.6",
+    "firebase-tools": "15.36.0",
+    "jsdom": "31.0.1",
+    "tailwindcss": "4.3.5",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0",
+    "@electric-sql/pglite": "0.3.16"
+  },
+  "engines": {
+    "node": ">=22.19.0 <25"
+  }
+}
