@@ -34,17 +34,68 @@ import { RecordForm, type FormTarget } from "@/components/shared/record-form";
 import { ExpenseChart } from "@/components/shared/charts";
 import { reminderStatus } from "@/features/reminders/calculations";
 import { date, km, money, today } from "@/lib/formatting";
+function WelcomeCard({
+  storageKey,
+  name,
+  onAdd,
+}: {
+  storageKey: string;
+  name?: string | null;
+  onAdd: () => void;
+}) {
+  const [skipped, setSkipped] = useState(() => {
+    try {
+      return window.localStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  if (skipped) return null;
+
+  function skip() {
+    try {
+      window.localStorage.setItem(storageKey, "1");
+    } catch {
+      // Dismiss for this visit if browser storage is unavailable.
+    }
+    setSkipped(true);
+  }
+
+  return (
+    <section className="card onboarding-card" aria-labelledby="welcome-title">
+      <Gauge size={32} aria-hidden="true" />
+      <h2 id="welcome-title">Welcome to MotoLog{name ? `, ${name}` : ""}</h2>
+      <p>
+        Add your first vehicle to track its mileage, maintenance, fuel and
+        expenses in one place.
+      </p>
+      <div className="heading-actions">
+        <Button onClick={onAdd}>Add My First Vehicle</Button>
+        <Button variant="outline" onClick={skip}>Skip for Now</Button>
+      </div>
+    </section>
+  );
+}
 export default function Dashboard() {
   const { user, demo } = useAuth();
-  const { vehicles, selectedId, loading } = useData();
-  const { schedules, recent, error, limited } = useOverview();
+  const { vehicles, selectedId, loading, error: garageError } = useData();
+  const {
+    schedules, recent, error, limited, loading: overviewLoading,
+  } = useOverview();
   const current = today();
   const year = Number(current.slice(0, 4));
-  const { summaries, error: summaryError } = useSummaries(year);
+  const { summaries, error: summaryError, loading: summariesLoading } =
+    useSummaries(year);
   const [target, setTarget] = useState<FormTarget | null>(null);
+  const [vehicleAdded, setVehicleAdded] = useState(false);
   const reduced = useReducedMotion();
+  const onboardingKey = user
+    ? `motolog-onboarding-${user.backend}-${user.uid}`
+    : "";
   const vehicle = vehicles.find((v) => v.id === selectedId);
-  const active = vehicles.filter((v) => !v.archived);
+  const activeCount = vehicles.filter((v) => !v.archived).length;
+  const remindersUnavailable = Boolean(error || garageError);
   const reminders = schedules
     .filter((s) => s.active && !s.completed)
     .map((s) => ({
@@ -83,31 +134,37 @@ export default function Dashboard() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <PageHeading
-        eyebrow="A GOOD DAY TO GO FURTHER"
-        title={`Welcome back${demo ? "" : user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}.`}
-        description="A little care today. More open roads tomorrow."
-      >
-        <Button
-          variant="outline"
-          disabled={!vehicle}
-          onClick={() => setTarget({ kind: "expenses", vehicleId: selectedId })}
+      <div className="dashboard-heading">
+        <PageHeading
+          eyebrow="Dashboard"
+          title={`Welcome back${demo ? "" : user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}.`}
+          description="Manage your vehicles and see your latest activity."
         >
-          <Plus size={15} />
-          Add expense
-        </Button>
-        <Button
-          onClick={() =>
-            setTarget({
-              kind: vehicle ? "serviceRecords" : "vehicle",
-              vehicleId: selectedId,
-            })
-          }
-        >
-          <Wrench size={15} />
-          {vehicle ? "Log service" : "Add vehicle"}
-        </Button>
-      </PageHeading>
+          <Button
+            variant="outline"
+            disabled={!vehicle}
+            onClick={() => setTarget({ kind: "expenses", vehicleId: selectedId })}
+          >
+            <Plus size={15} />
+            Add expense
+          </Button>
+          <Button onClick={() => setTarget({ kind: "vehicle" })}>
+            <Plus size={15} />
+            Add vehicle
+          </Button>
+        </PageHeading>
+      </div>
+      {vehicleAdded && (
+        <p className="notice" role="status">Vehicle added to your garage.</p>
+      )}
+      {!demo && onboardingKey && !loading && !garageError && vehicles.length === 0 && (
+        <WelcomeCard
+          key={onboardingKey}
+          storageKey={onboardingKey}
+          name={user?.displayName}
+          onAdd={() => setTarget({ kind: "vehicle" })}
+        />
+      )}
       {(error || summaryError) && (
         <div className="notice" role="alert">
           {error || summaryError}
@@ -119,25 +176,25 @@ export default function Dashboard() {
           to load more.
         </p>
       )}
-      {loading ? (
+      {loading || overviewLoading || summariesLoading ? (
         <div className="skeleton" />
       ) : (
         <>
           <div className="stats-grid">
             <Stat
-              title="Vehicles in garage"
-              value={
+              title="Registered vehicles"
+              value={garageError ? "Unavailable" : (
                 <>
-                  {active.length}
+                  {vehicles.length}
                   <small>vehicles</small>
                 </>
-              }
-              foot={`${active.filter((v) => v.type === "motorcycle").length} motorcycles · ${active.filter((v) => v.type === "car").length} cars`}
+              )}
+              foot={garageError ? "Garage could not be loaded" : `${activeCount} active`}
               icon={<LayoutGrid size={16} />}
             />
             <Stat
               title="This month’s expenses"
-              value={money(month)}
+              value={summaryError ? "Unavailable" : money(month)}
               foot={
                 <>
                   <span className="green">●</span> All vehicles ·{" "}
@@ -152,12 +209,12 @@ export default function Dashboard() {
               title="Upcoming services"
               value={
                 <>
-                  {reminders.length}
+                  {remindersUnavailable ? "—" : reminders.length}
                   <small>reminders</small>
                 </>
               }
               foot={
-                overdue ? (
+                remindersUnavailable ? "Reminders unavailable" : overdue ? (
                   <span className="amber">
                     {overdue} overdue · a little attention needed
                   </span>
@@ -169,7 +226,7 @@ export default function Dashboard() {
             />
             <Stat
               title="Annual expenses"
-              value={money(annual)}
+              value={summaryError ? "Unavailable" : money(annual)}
               foot={`${year} year to date · all vehicles`}
               icon={<CircleDollarSign size={16} />}
             />
@@ -179,7 +236,7 @@ export default function Dashboard() {
               <div className="card-header">
                 <div>
                   <h2>Your active vehicle</h2>
-                  <p>Ready for the road ahead.</p>
+                  <p>My Garage preview</p>
                 </div>
                 <VehicleSelect />
               </div>
@@ -350,7 +407,7 @@ export default function Dashboard() {
             <section className="card">
               <div className="card-header">
                 <div>
-                  <h2>Where the ringgit goes</h2>
+                  <h2>Monthly spending</h2>
                   <p>Your monthly spending, at a glance.</p>
                 </div>
                 <span className="badge">
@@ -358,11 +415,20 @@ export default function Dashboard() {
                   {year}
                 </span>
               </div>
-              <div className="chart-summary">
-                <strong>{money(annual)}</strong>
-                <span>spent this year</span>
-              </div>
-              <ExpenseChart data={chartData} />
+              {summaryError || summaries.length === 0 ? (
+                <EmptyState
+                  title={summaryError ? "Spending unavailable" : "No expenses this year"}
+                  description={summaryError ? "Refresh the page to try again." : "Log an expense to see your spending here."}
+                />
+              ) : (
+                <>
+                  <div className="chart-summary">
+                    <strong>{money(annual)}</strong>
+                    <span>spent this year</span>
+                  </div>
+                  <ExpenseChart data={chartData} />
+                </>
+              )}
               <div className="card-footer">
                 <span className="legend">
                   <span>
@@ -445,7 +511,13 @@ export default function Dashboard() {
           </div>
         </>
       )}
-      {target && <RecordForm target={target} onClose={() => setTarget(null)} />}
+      {target && (
+        <RecordForm
+          target={target}
+          onClose={() => setTarget(null)}
+          onSaved={target.kind === "vehicle" ? () => setVehicleAdded(true) : undefined}
+        />
+      )}
     </motion.div>
   );
 }

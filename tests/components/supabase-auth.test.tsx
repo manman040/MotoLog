@@ -61,7 +61,10 @@ describe("Supabase authentication UI", () => {
     await waitFor(() =>
       expect(mocks.google).toHaveBeenCalledWith({
         provider: "google",
-        options: { redirectTo: expect.stringContaining("/auth/callback") },
+        options: {
+          redirectTo: expect.stringContaining("/auth/callback"),
+          queryParams: { prompt: "select_account" },
+        },
       }),
     );
     expect(mocks.replace).not.toHaveBeenCalled();

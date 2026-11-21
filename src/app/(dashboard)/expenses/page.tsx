@@ -101,7 +101,7 @@ export default function Expenses() {
           icon={<Fuel size={16} />}
         />
       </div>
-      <div className="expense-charts">
+      <div className="expense-charts" id="analytics">
         <section className="card">
           <div className="card-header">
             <h2>Monthly expense trend</h2>

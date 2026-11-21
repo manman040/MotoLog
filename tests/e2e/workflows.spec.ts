@@ -17,7 +17,21 @@ test("protected routes and complete local garage workflow", async ({
     "scrollWidth",
     await page.evaluate(() => window.innerWidth),
   );
-  await page.goto("/garage");
+  const mobileNav = page.getByRole("navigation", { name: "Mobile navigation" });
+  if (await mobileNav.isVisible()) {
+    const more = mobileNav.getByRole("button", { name: "More" });
+    await more.click();
+    const dialog = page.getByRole("dialog", { name: "More" });
+    await expect(dialog.getByRole("link", { name: "Fuel Tracker" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(more).toBeFocused();
+    await mobileNav.getByRole("link", { name: "Garage" }).click();
+  } else {
+    const sidebar = page.getByRole("navigation", { name: "Main navigation" });
+    await expect(sidebar.getByRole("link", { name: "Analytics" })).toHaveAttribute("href", "/expenses#analytics");
+    await sidebar.getByRole("link", { name: "My Garage" }).click();
+  }
+  await expect(page).toHaveURL(/garage/);
   await page.getByRole("button", { name: "Add vehicle", exact: true }).click();
   await page.getByLabel("Brand *", { exact: true }).fill("Yamaha");
   await page.getByLabel("Model *", { exact: true }).fill("Test ride");

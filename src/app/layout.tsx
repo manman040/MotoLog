@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "MotoLog",
   },
   icons: { icon: "/icon.svg", apple: "/icons/icon-192.png" },
@@ -22,7 +22,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#09090b",
+  viewportFit: "cover",
+  themeColor: "#f4f7f7",
 };
 export default function RootLayout({
   children,
