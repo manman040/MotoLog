@@ -44,7 +44,10 @@ export async function googleSignIn() {
     await ensureGoogleEnabled();
     const { error } = await supabaseBrowser().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { prompt: "select_account" },
+      },
     });
     if (error) throw error;
     return false;

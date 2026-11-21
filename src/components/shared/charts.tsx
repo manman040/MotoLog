@@ -16,12 +16,12 @@ import {
 import { money } from "@/lib/formatting";
 export type ChartDatum = { name: string; value: number };
 const colors = [
-  "#a78bfa",
-  "#22d3ee",
-  "#e9b767",
-  "#74c99e",
-  "#f38c9e",
-  "#70708f",
+  "var(--primary)",
+  "#427caa",
+  "var(--warning)",
+  "var(--success)",
+  "var(--error)",
+  "#69568f",
 ];
 export function ExpenseChart({
   data,
@@ -56,10 +56,10 @@ export function ExpenseChart({
             <Tooltip
               formatter={(v) => money(Number(v))}
               contentStyle={{
-                background: "#202027",
-                border: "1px solid #383842",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
                 borderRadius: 8,
-                color: "#eee",
+                color: "var(--text)",
               }}
             />
           </PieChart>
@@ -68,16 +68,16 @@ export function ExpenseChart({
             data={data}
             margin={{ left: 0, right: 20, top: 15, bottom: 0 }}
           >
-            <CartesianGrid stroke="#26262f" vertical={false} />
+            <CartesianGrid stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fill: "#777789", fontSize: 10 }}
+              tick={{ fill: "var(--muted)", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
               tickFormatter={(v) => `${v / 100}`}
-              tick={{ fill: "#777789", fontSize: 9 }}
+              tick={{ fill: "var(--muted)", fontSize: 9 }}
               axisLine={false}
               tickLine={false}
               width={55}
@@ -85,15 +85,15 @@ export function ExpenseChart({
             <Tooltip
               formatter={(v) => money(Number(v))}
               contentStyle={{
-                background: "#202027",
-                border: "1px solid #383842",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
                 borderRadius: 8,
               }}
             />
             <Bar
               isAnimationActive={false}
               dataKey="value"
-              fill="#a78bfa"
+              fill="var(--primary)"
               radius={[4, 4, 0, 0]}
               maxBarSize={45}
             />
@@ -105,25 +105,25 @@ export function ExpenseChart({
           >
             <defs>
               <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.22} />
-                <stop offset="100%" stopColor="#a78bfa" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid
-              stroke="#282830"
+              stroke="var(--border)"
               strokeDasharray="3 5"
               vertical={false}
             />
             <XAxis
               dataKey="name"
-              tick={{ fill: "#777789", fontSize: 9 }}
+              tick={{ fill: "var(--muted)", fontSize: 9 }}
               axisLine={false}
               tickLine={false}
               dy={8}
             />
             <YAxis
               tickFormatter={(v) => `${v / 100}`}
-              tick={{ fill: "#777789", fontSize: 9 }}
+              tick={{ fill: "var(--muted)", fontSize: 9 }}
               axisLine={false}
               tickLine={false}
               width={55}
@@ -131,15 +131,15 @@ export function ExpenseChart({
             <Tooltip
               formatter={(v) => money(Number(v))}
               contentStyle={{
-                background: "#202027",
-                border: "1px solid #383842",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
                 borderRadius: 8,
               }}
             />
             <Area
               type="monotone"
               dataKey="value"
-              stroke="#a78bfa"
+              stroke="var(--primary)"
               strokeWidth={2}
               fill="url(#expenseGradient)"
               isAnimationActive={false}

@@ -1,40 +1,57 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  ChartNoAxesCombined,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   FileText,
+  Fuel,
   Gauge,
   House,
   LayoutGrid,
   LogOut,
   Menu,
   Settings,
-  ShieldCheck,
   Wallet,
   Wrench,
   X,
 } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 import { useAuth } from "@/features/auth/provider";
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: House },
-  { href: "/garage", label: "My Garage", icon: LayoutGrid },
-  { href: "/maintenance", label: "Maintenance", icon: Wrench },
-  { href: "/expenses", label: "Expenses", icon: Wallet },
+  { href: "/dashboard", label: "Dashboard", mobile: "Home", icon: House },
+  { href: "/garage", label: "My Garage", mobile: "Garage", icon: LayoutGrid },
+  {
+    href: "/maintenance",
+    label: "Maintenance",
+    mobile: "Maintenance",
+    icon: Wrench,
+  },
+  { href: "/expenses", label: "Expenses", mobile: "Expenses", icon: Wallet },
+  { href: "/fuel", label: "Fuel Tracker", icon: Fuel },
+  {
+    href: "/expenses#analytics",
+    label: "Analytics",
+    icon: ChartNoAxesCombined,
+  },
   { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+const isCurrent = (path: string, href: string) =>
+  path === href || path.startsWith(`${href}/`);
+
 export function Shell({ children }: { children: ReactNode }) {
   const { user, demo, loading, logout } = useAuth();
   const router = useRouter();
   const path = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [menu, setMenu] = useState(false);
+  const moreButton = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!loading && !user && !demo) router.replace("/login");
@@ -52,22 +69,26 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="skeleton" />
       </main>
     );
-  const current = nav.find((n) => path.startsWith(n.href));
+  const current = nav.find((n) => isCurrent(path, n.href));
   const name = demo
     ? "Demo explorer"
     : user?.displayName || user?.email?.split("@")[0] || "Your account";
+  async function signOut() {
+    try {
+      await logout();
+      router.replace("/login");
+    } catch {
+      setError("Sign out failed. Please try again.");
+    }
+  }
+  const mobilePrimary = nav.filter((item) => item.mobile);
+  const secondary = nav.filter((item) => !item.mobile);
+  const hasSecondaryPage = secondary.some((item) => isCurrent(path, item.href));
   return (
-    <div
-      className={`app-shell ${collapsed ? "collapsed" : ""} ${menu ? "menu-open" : ""}`}
-    >
+    <div className={`app-shell${collapsed ? " collapsed" : ""}`}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      <button
-        className="mobile-backdrop"
-        onClick={() => setMenu(false)}
-        aria-label="Close navigation"
-      />
       <aside className="sidebar">
         <Link
           href="/dashboard"
@@ -78,17 +99,15 @@ export function Shell({ children }: { children: ReactNode }) {
           <span>
             Moto<span>Log</span>
           </span>
-          <small>BETA</small>
         </Link>
-        <div className="nav-caption">WORKSPACE</div>
         <nav aria-label="Main navigation">
           {nav.map((n) => (
             <Link
               key={n.href}
-              className={`nav-link ${path.startsWith(n.href) ? "active" : ""}`}
+              className={`nav-link ${isCurrent(path, n.href) ? "active" : ""}`}
               href={n.href}
-              onClick={() => setMenu(false)}
-              aria-current={path.startsWith(n.href) ? "page" : undefined}
+              aria-label={n.label}
+              aria-current={isCurrent(path, n.href) ? "page" : undefined}
             >
               <n.icon />
               <span>{n.label}</span>
@@ -96,11 +115,6 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="garage-note">
-            <ShieldCheck size={21} />
-            <strong>A little care. A longer journey.</strong>
-            <p>Keep your vehicles ready for whatever comes next.</p>
-          </div>
           <button
             className="nav-link desktop-collapse"
             onClick={() => setCollapsed(!collapsed)}
@@ -122,14 +136,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <button
               className="text-button"
               aria-label="Sign out"
-              onClick={async () => {
-                try {
-                  await logout();
-                  router.replace("/login");
-                } catch {
-                  setError("Sign out failed. Please try again.");
-                }
-              }}
+              onClick={() => void signOut()}
             >
               <LogOut size={15} />
             </button>
@@ -139,13 +146,6 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            <button
-              className="icon-button mobile-menu-btn"
-              aria-label="Open navigation"
-              onClick={() => setMenu(!menu)}
-            >
-              {menu ? <X size={18} /> : <Menu size={18} />}
-            </button>
             <House size={13} />
             <span className="crumb-parent">Workspace</span>
             <ChevronRight size={12} />
@@ -167,7 +167,6 @@ export function Shell({ children }: { children: ReactNode }) {
               aria-label="View reminders"
             >
               <Bell size={16} />
-              <span className="dot" />
             </Link>
             <Link
               href="/settings"
@@ -192,37 +191,62 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           )}
           {children}
-          <footer className="bottom-note">
-            <span>
-              <ShieldCheck size={11} />
-              {demo
-                ? "Browser-local sample data"
-                : "Your garage. Your data. Securely stored."}
-            </span>
-            <span>MotoLog · Every vehicle. Every service. One place.</span>
-          </footer>
         </main>
       </div>
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {nav.slice(0, 4).map((n) => (
+        {mobilePrimary.map((n) => (
           <Link
             key={n.href}
-            className={path.startsWith(n.href) ? "active" : ""}
+            className={isCurrent(path, n.href) ? "active" : ""}
             href={n.href}
+            aria-current={isCurrent(path, n.href) ? "page" : undefined}
           >
             <n.icon />
-            {n.label === "My Garage" ? "Garage" : n.label}
+            {n.mobile}
           </Link>
         ))}
         <button
+          ref={moreButton}
           onClick={() => setMenu(true)}
-          aria-label="More navigation options"
+          className={hasSecondaryPage ? "active" : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={menu}
         >
           <Menu />
           More
         </button>
       </nav>
-      {error && (
+      <Dialog
+        open={menu}
+        onOpenChange={setMenu}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          moreButton.current?.focus();
+        }}
+        title="More"
+        description="Open a MotoLog section or sign out."
+      >
+        <nav className="more-links" aria-label="More navigation">
+          {secondary.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setMenu(false)}
+              className={`nav-link${isCurrent(path, item.href) ? " active" : ""}`}
+              aria-current={isCurrent(path, item.href) ? "page" : undefined}
+            >
+              <item.icon />
+              {item.label}
+            </Link>
+          ))}
+          <button className="nav-link" onClick={() => void signOut()}>
+            <LogOut />
+            Sign out
+          </button>
+        </nav>
+        {error && <p role="alert" className="field-error">{error}</p>}
+      </Dialog>
+      {error && !menu && (
         <div role="alert" className="toast error">
           {error}
           <button onClick={() => setError("")} aria-label="Dismiss error">

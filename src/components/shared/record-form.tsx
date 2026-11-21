@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -31,6 +31,7 @@ type Field = {
   required?: boolean;
   full?: boolean;
   help?: string;
+  section?: string;
 };
 const categories = [
   "Engine oil",
@@ -53,7 +54,12 @@ const categories = [
 ];
 const fields: Record<RecordKind | "vehicle", Field[]> = {
   vehicle: [
-    { name: "type", label: "Vehicle type", options: ["motorcycle", "car"] },
+    {
+      name: "type",
+      label: "Vehicle type",
+      options: ["motorcycle", "car"],
+      section: "Vehicle details",
+    },
     { name: "nickname", label: "Nickname" },
     { name: "brand", label: "Brand", required: true },
     { name: "model", label: "Model", required: true },
@@ -78,6 +84,7 @@ const fields: Record<RecordKind | "vehicle", Field[]> = {
     {
       name: "fuelType",
       label: "Fuel type",
+      section: "Specifications and photo",
       options: ["Petrol", "Diesel", "Electric", "Hybrid", "Other"],
     },
     {
@@ -90,6 +97,7 @@ const fields: Record<RecordKind | "vehicle", Field[]> = {
       name: "photoPath",
       label: "Vehicle photo",
       type: "file",
+      full: true,
       help: "JPEG, PNG or WebP · maximum 5 MB",
     },
   ],
@@ -451,126 +459,129 @@ export function RecordForm({
         target.kind === "maintenanceSchedules"
           ? "Set your own thresholds using your owner’s manual or workshop advice. Either threshold makes a reminder due."
           : target.kind === "vehicle"
-            ? "Make a little room in your garage. Motorcycles and cars are welcome."
+            ? "Enter the vehicle details. You can also attach a photo."
             : `For ${vehicle ? `${vehicle.brand} ${vehicle.model}` : "your garage"} · ${demo ? "browser-local demo" : "saved to your account"}`
       }
     >
       <form onSubmit={handleSubmit(submit)} noValidate>
         <div className="form-grid">
           {fields[target.kind].map((f) => (
-            <div key={f.name} className={f.full ? "full" : ""}>
-              <label className={f.type === "checkbox" ? "check-label" : ""}>
-                {f.label}
-                {f.required && " *"}
-                {f.type === "file" ? (
-                  <input
-                    type="file"
-                    accept={
-                      target.kind === "vehicle"
-                        ? "image/jpeg,image/png,image/webp"
-                        : "image/jpeg,image/png,image/webp,application/pdf"
-                    }
-                    disabled={demo || busy}
-                    onChange={(e) => {
-                      const selected = e.target.files?.[0] || null;
-                      setError("");
-                      setFile(null);
-                      if (selected) {
-                        try {
-                          validateUpload(selected);
-                          if (
-                            target.kind === "vehicle" &&
-                            !selected.type.startsWith("image/")
-                          )
-                            throw new Error("Vehicle photos must be images.");
-                          setFile(selected);
-                        } catch (error) {
-                          e.target.value = "";
-                          setError(
-                            error instanceof Error
-                              ? error.message
-                              : "Invalid file.",
-                          );
-                        }
+            <Fragment key={f.name}>
+              {f.section && <h3 className="form-section full">{f.section}</h3>}
+              <div className={f.full ? "full" : ""}>
+                <label className={f.type === "checkbox" ? "check-label" : ""}>
+                  {f.label}
+                  {f.required && " *"}
+                  {f.type === "file" ? (
+                    <input
+                      type="file"
+                      accept={
+                        target.kind === "vehicle"
+                          ? "image/jpeg,image/png,image/webp"
+                          : "image/jpeg,image/png,image/webp,application/pdf"
                       }
-                    }}
-                  />
-                ) : f.options ? (
-                  <select {...register(f.name)}>
-                    {f.options.map((o) => (
-                      <option key={o}>{o}</option>
-                    ))}
-                  </select>
-                ) : f.type === "textarea" ? (
-                  <textarea {...register(f.name)} maxLength={2000} />
-                ) : (
-                  <input
-                    {...register(f.name)}
-                    type={
-                      f.type === "checkbox"
-                        ? "checkbox"
-                        : f.type === "date"
-                          ? "date"
-                          : [
-                                "money",
-                                "number",
-                                "decimal",
-                                "nullable-number",
-                              ].includes(f.type || "")
-                            ? "number"
-                            : "text"
-                    }
-                    step={
-                      ["money", "decimal"].includes(f.type || "") ? "0.01" : "1"
-                    }
-                    min={
-                      [
-                        "money",
-                        "number",
-                        "decimal",
-                        "nullable-number",
-                      ].includes(f.type || "")
-                        ? "0"
-                        : undefined
-                    }
-                    inputMode={
-                      ["money", "decimal"].includes(f.type || "")
-                        ? "decimal"
-                        : ["number", "nullable-number"].includes(f.type || "")
-                          ? "numeric"
+                      disabled={demo || busy}
+                      onChange={(e) => {
+                        const selected = e.target.files?.[0] || null;
+                        setError("");
+                        setFile(null);
+                        if (selected) {
+                          try {
+                            validateUpload(selected);
+                            if (
+                              target.kind === "vehicle" &&
+                              !selected.type.startsWith("image/")
+                            )
+                              throw new Error("Vehicle photos must be images.");
+                            setFile(selected);
+                          } catch (error) {
+                            e.target.value = "";
+                            setError(
+                              error instanceof Error
+                                ? error.message
+                                : "Invalid file.",
+                            );
+                          }
+                        }
+                      }}
+                    />
+                  ) : f.options ? (
+                    <select {...register(f.name)}>
+                      {f.options.map((o) => (
+                        <option key={o}>{o}</option>
+                      ))}
+                    </select>
+                  ) : f.type === "textarea" ? (
+                    <textarea {...register(f.name)} maxLength={2000} />
+                  ) : (
+                    <input
+                      {...register(f.name)}
+                      type={
+                        f.type === "checkbox"
+                          ? "checkbox"
+                          : f.type === "date"
+                            ? "date"
+                            : [
+                                  "money",
+                                  "number",
+                                  "decimal",
+                                  "nullable-number",
+                                ].includes(f.type || "")
+                              ? "number"
+                              : "text"
+                      }
+                      step={
+                        ["money", "decimal"].includes(f.type || "") ? "0.01" : "1"
+                      }
+                      min={
+                        [
+                          "money",
+                          "number",
+                          "decimal",
+                          "nullable-number",
+                        ].includes(f.type || "")
+                          ? "0"
                           : undefined
-                    }
-                    maxLength={300}
-                    list={
-                      f.name === "categoryId"
-                        ? "maintenance-categories"
-                        : undefined
-                    }
-                    disabled={
-                      target.kind === "vehicle" &&
-                      !!savedVehicleId &&
-                      f.name === "currentOdometerKm"
-                    }
-                    aria-invalid={Boolean(errors[f.name])}
-                    aria-describedby={
-                      errors[f.name] ? `error-${f.name}` : undefined
-                    }
-                  />
+                      }
+                      inputMode={
+                        ["money", "decimal"].includes(f.type || "")
+                          ? "decimal"
+                          : ["number", "nullable-number"].includes(f.type || "")
+                            ? "numeric"
+                            : undefined
+                      }
+                      maxLength={300}
+                      list={
+                        f.name === "categoryId"
+                          ? "maintenance-categories"
+                          : undefined
+                      }
+                      disabled={
+                        target.kind === "vehicle" &&
+                        !!savedVehicleId &&
+                        f.name === "currentOdometerKm"
+                      }
+                      aria-invalid={Boolean(errors[f.name])}
+                      aria-describedby={
+                        errors[f.name] ? `error-${f.name}` : undefined
+                      }
+                    />
+                  )}
+                  {errors[f.name] && (
+                    <span id={`error-${f.name}`} className="field-error">
+                      {errors[f.name]?.message}
+                    </span>
+                  )}
+                </label>
+                {f.help && <p className="form-help">{f.help}</p>}
+                {f.type === "file" && demo && (
+                  <p className="form-help">
+                    File uploads are available when signed into a connected
+                    account.
+                  </p>
                 )}
-                {errors[f.name] && (
-                  <span id={`error-${f.name}`} className="field-error">
-                    {errors[f.name]?.message}
-                  </span>
-                )}
-              </label>
-              {f.help && <p className="form-help">{f.help}</p>}
-              {f.type === "file" && demo && (
-                <p className="form-help">
-                  File uploads are available when signed into a connected
-                  account.
-                </p>
-              )}
-            </div>
+              </div>
+            </Fragment>
           ))}
         </div>
         <datalist id="maintenance-categories">

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -28,7 +28,16 @@ export default function Login() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const pending = useRef(false);
   useEffect(() => {
+    function restore(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      pending.current = false;
+      setBusy(false);
+      setGoogleBusy(false);
+    }
+    window.addEventListener("pageshow", restore);
     const query = new URLSearchParams(window.location.search);
     void Promise.resolve().then(() => {
       if (query.has("authError"))
@@ -36,6 +45,7 @@ export default function Login() {
       if (query.get("passwordUpdated") === "1")
         setMessage("Password updated. Sign in with your new password.");
     });
+    return () => window.removeEventListener("pageshow", restore);
   }, []);
   const {
     register: field,
@@ -43,16 +53,20 @@ export default function Login() {
     getValues,
     formState: { errors },
   } = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) });
-  async function action(fn: () => Promise<unknown>) {
+  async function action(fn: () => Promise<unknown>, google = false) {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
+    setGoogleBusy(google);
     setError("");
     try {
-      await fn();
+      if ((await fn()) === "redirecting") return;
     } catch (error) {
       setError(authErrorMessage(error));
-    } finally {
-      setBusy(false);
     }
+    pending.current = false;
+    setBusy(false);
+    setGoogleBusy(false);
   }
   return (
     <main className="auth-page">
@@ -63,7 +77,7 @@ export default function Login() {
         </b>
       </div>
       <section className="auth-card">
-        <span className="eyebrow">YOUR GARAGE. SIMPLIFIED.</span>
+        <span className="eyebrow">Your Vehicle, Simplified.</span>
         <h1>
           Take care of the ride.
           <br />
@@ -85,26 +99,28 @@ export default function Login() {
           </div>
         )}
         <form
-          onSubmit={handleSubmit((v) =>
-            action(async () => {
-              exitDemo();
-              if (register) {
-                const signedIn = await signUp(v.email, v.password);
-                if (!signedIn) {
-                  setMessage(
-                    "Check your inbox to confirm your email, then sign in.",
-                  );
-                  return;
-                }
-              } else await signIn(v.email, v.password);
-              router.replace(
-                safeNext(
-                  new URLSearchParams(window.location.search).get("next"),
-                ),
-              );
-              router.refresh();
-            }),
-          )}
+          onSubmit={(event) =>
+            void handleSubmit((v) =>
+              action(async () => {
+                exitDemo();
+                if (register) {
+                  const signedIn = await signUp(v.email, v.password);
+                  if (!signedIn) {
+                    setMessage(
+                      "Check your inbox to confirm your email, then sign in.",
+                    );
+                    return;
+                  }
+                } else await signIn(v.email, v.password);
+                router.replace(
+                  safeNext(
+                    new URLSearchParams(window.location.search).get("next"),
+                  ),
+                );
+                router.refresh();
+              }),
+            )(event)
+          }
         >
           <label>
             Email address
@@ -144,11 +160,13 @@ export default function Login() {
               if (await googleSignIn()) {
                 router.replace("/dashboard");
                 router.refresh();
+              } else {
+                return "redirecting";
               }
-            })
+            }, true)
           }
         >
-          Continue with Google
+          {googleBusy ? "Opening Google…" : "Continue with Google"}
         </Button>
         <button
           className="text-button"

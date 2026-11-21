@@ -5,12 +5,14 @@ import type { ReactNode } from "react";
 export function Dialog({
   open,
   onOpenChange,
+  onCloseAutoFocus,
   title,
   description,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: React.ComponentProps<typeof DialogPrimitive.Content>["onCloseAutoFocus"];
   title: string;
   description?: string;
   children: ReactNode;
@@ -19,7 +21,10 @@ export function Dialog({
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="modal-overlay" />
-        <DialogPrimitive.Content className="modal-content">
+        <DialogPrimitive.Content
+          className="modal-content"
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
           <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
           <DialogPrimitive.Description>
             {description ??
